@@ -1,4 +1,4 @@
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const express = require("express");
 const app = express();
 require("dotenv").config();
@@ -31,6 +31,31 @@ async function run() {
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
 
+    //   create cart collection
+    const cartCollection = client.db("bistroBossBD").collection("carts");
+    app.post("/carts", async (req, res) => {
+      const cartItem = req.body;
+      const result = await cartCollection.insertOne(cartItem);
+      res.send(result);
+    });
+
+    //   get cart data for specific user
+    app.get("/carts", async (req, res) => {
+      const email = req.query.email;
+      const query = { email: email };
+      const result = await cartCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    //   cart delete api
+    app.delete("/carts/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await cartCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    //   get all menu from menuCollection
     const menuCollection = client.db("bistroBossBD").collection("menu");
 
     app.get("/menu", async (req, res) => {
@@ -38,7 +63,7 @@ async function run() {
       res.send(result);
     });
 
-    //   get all reviews
+    //   get all reviews from review collecetion
     const rivewsCollection = client.db("bistroBossBD").collection("reviews");
     app.get("/reviews", async (req, res) => {
       const result = await rivewsCollection.find().toArray();
