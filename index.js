@@ -69,6 +69,15 @@ async function run() {
       const result = await rivewsCollection.find().toArray();
       res.send(result);
     });
+
+    // user related api
+    const usersCollection = client.db("bistroBossBD").collection("users");
+
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      const result = await usersCollection.insertOne(user);
+      res.send(result);
+    });
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
