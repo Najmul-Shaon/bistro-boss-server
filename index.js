@@ -4,6 +4,8 @@ const app = express();
 require("dotenv").config();
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
+// This is your test secret API key.
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const port = process.env.PORT || 5000;
 
@@ -98,6 +100,41 @@ async function run() {
       res.send(result);
     });
 
+    // menu item delete
+    app.delete("/menu/:id", verifyToken, verifyAdmin, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await menuCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    // menu info update by id>> get
+    app.get("/menu/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await menuCollection.findOne(query);
+      res.send(result);
+    });
+
+    // menu info update by id>> patch
+    app.patch("/menu/:id", async (req, res) => {
+      const id = req.params.id;
+
+      const item = req.body;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          name: item.name,
+          category: item.category,
+          price: item.price,
+          recipe: item.recipe,
+          image: item.image,
+        },
+      };
+      const result = await menuCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
+
     //   get all reviews from review collecetion
     const rivewsCollection = client.db("bistroBossBD").collection("reviews");
     app.get("/reviews", async (req, res) => {
@@ -176,6 +213,20 @@ async function run() {
         expiresIn: "1h",
       });
       res.send({ token });
+    });
+
+    // stripe payment method
+    app.post("/create-payment-intent", async (req, res) => {
+      const { price } = req.body;
+      const amount = parseInt(price *100);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+      res.send({
+        clientSecret: paymentIntent.client_secret
+      })
     });
   } finally {
     // Ensures that the client will close when you finish/error
