@@ -13,7 +13,6 @@ app.use(express.json());
 
 // token verify middleware
 const verifyToken = (req, res, next) => {
-  console.log("inside verify token", req.headers.authorization);
   if (!req.headers.authorization) {
     return res.status(401).send({ message: "unauthorized access" });
   }
@@ -25,14 +24,6 @@ const verifyToken = (req, res, next) => {
     req.decoded = decoded;
     next();
   });
-};
-
-// use verify admin after verify token
-const verifyAdmin = async (req, res, next) => {
-  const email = req.decoded.email;
-  const query = { email: email };
-  const user = await usersCollection.findOne(query);
-  const isAdmin = user?.role
 };
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.cwzf5.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -55,6 +46,18 @@ async function run() {
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
     );
+    const usersCollection = client.db("bistroBossBD").collection("users");
+    // use verify admin after verify token
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      const isAdmin = user?.role === "admin";
+      if (!isAdmin) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      next();
+    };
 
     //   create cart collection
     const cartCollection = client.db("bistroBossBD").collection("carts");
@@ -88,6 +91,13 @@ async function run() {
       res.send(result);
     });
 
+    // menu item add into db
+    app.post("/menu", verifyToken, verifyAdmin, async (req, res) => {
+      const item = req.body;
+      const result = await menuCollection.insertOne(item);
+      res.send(result);
+    });
+
     //   get all reviews from review collecetion
     const rivewsCollection = client.db("bistroBossBD").collection("reviews");
     app.get("/reviews", async (req, res) => {
@@ -96,7 +106,7 @@ async function run() {
     });
 
     // user related api
-    const usersCollection = client.db("bistroBossBD").collection("users");
+
     // create user into the db
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -111,14 +121,14 @@ async function run() {
     });
 
     // get all users
-    app.get("/users", verifyToken, async (req, res) => {
+    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       // console.log(req.headers);
       const resul = await usersCollection.find().toArray();
       res.send(resul);
     });
 
     // delete user
-    app.delete("/users/:id", async (req, res) => {
+    app.delete("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await usersCollection.deleteOne(query);
@@ -126,17 +136,22 @@ async function run() {
     });
 
     // user assign to admin role
-    app.patch("/users/admin/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const updatedDoc = {
-        $set: {
-          role: "admin",
-        },
-      };
-      const result = await usersCollection.updateOne(query, updatedDoc);
-      res.send(result);
-    });
+    app.patch(
+      "/users/admin/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const updatedDoc = {
+          $set: {
+            role: "admin",
+          },
+        };
+        const result = await usersCollection.updateOne(query, updatedDoc);
+        res.send(result);
+      }
+    );
 
     // check user admin or not by email
     app.get("/user/admin/:email", verifyToken, async (req, res) => {
