@@ -218,15 +218,45 @@ async function run() {
     // stripe payment method
     app.post("/create-payment-intent", async (req, res) => {
       const { price } = req.body;
-      const amount = parseInt(price *100);
+      const amount = parseInt(price * 100);
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amount,
         currency: "usd",
         payment_method_types: ["card"],
       });
       res.send({
-        clientSecret: paymentIntent.client_secret
-      })
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
+
+    // payment related api
+    const paymentCollection = client.db("bistroBossBD").collection("payments");
+    // saved payment data
+    app.post("/payments", async (req, res) => {
+      const payment = req.body;
+      const paymentResult = await paymentCollection.insertOne(payment);
+      // console.log(payment);
+
+      // delete items from the cart
+      const query = {
+        _id: {
+          $in: payment.cardIds.map((id) => new ObjectId(id)),
+        },
+      };
+      const deleteResutl = await cartCollection.deleteMany(query);
+      res.send({ paymentResult, deleteResutl });
+    });
+
+    // get payment to show the history
+    app.get("/payments/:email", verifyToken, async (req, res) => {
+      const email = req.params.email;
+      console.log(email);
+      const query = { email: email };
+      if (email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
     });
   } finally {
     // Ensures that the client will close when you finish/error
