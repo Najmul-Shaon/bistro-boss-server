@@ -7,6 +7,17 @@ const jwt = require("jsonwebtoken");
 // This is your test secret API key.
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
+// mail gun
+const formData = require("form-data");
+const Mailgun = require("mailgun.js");
+const { default: axios } = require("axios");
+const mailgun = new Mailgun(formData);
+
+const mg = mailgun.client({
+  username: "api",
+  key: process.env.MAILGUN_API_KEY || "key-yourkeyhere",
+});
+
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -42,12 +53,12 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
+    // await client.connect();
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
     const usersCollection = client.db("bistroBossBD").collection("users");
     // use verify admin after verify token
     const verifyAdmin = async (req, res, next) => {
@@ -229,8 +240,93 @@ async function run() {
       });
     });
 
+    // *************************************
+
+    // Congratulations
+
+    // Sandbox Store ID Created
+
+    // We highly appreciate if you first connect with the sandbox and then move to the live system. Please inform us if you need to change Registered Store URL for testbox.
+
+    // Store ID: snowf679a86cdb94db
+    // Store Password (API/Secret Key): snowf679a86cdb94db@ssl
+
+    // Merchant Panel URL: https://sandbox.sslcommerz.com/manage/ (Credential as you inputted in the time of registration)
+
+    // Store name: testsnowfchul
+    // Registered URL: www.bistroboss.com
+    // Session API to generate transaction: https://sandbox.sslcommerz.com/gwprocess/v3/api.php
+    // Validation API: https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php?wsdl
+    // Validation API (Web Service) name: https://sandbox.sslcommerz.com/validator/api/validationserverAPI.php
+    // *************************************
+
     // payment related api
     const paymentCollection = client.db("bistroBossBD").collection("payments");
+    // ssl commerze
+    app.post("/create-ssl-payment", async (req, res) => {
+      const payment = req.body;
+      // console.log(payment);
+
+      const trxId = new ObjectId().toString();
+      payment.trxId = trxId;
+
+      const initiate = {
+        store_id: "snowf679a86cdb94db",
+        store_passwd: "snowf679a86cdb94db@ssl",
+        total_amount: payment.price,
+        currency: "BDT",
+        tran_id: trxId, // use unique tran_id for each api call
+        success_url: "http://localhost:5001/success",
+        fail_url: "http://localhost:5173/fail",
+        cancel_url: "http://localhost:5173/cancel",
+        ipn_url: "http://localhost:5001/ipn",
+        shipping_method: "Courier",
+        product_name: "Computer.",
+        product_category: "Electronic",
+        product_profile: "general",
+        cus_name: "Customer Name",
+        cus_email: payment.email,
+        cus_add1: "Dhaka",
+        cus_add2: "Dhaka",
+        cus_city: "Dhaka",
+        cus_state: "Dhaka",
+        cus_postcode: "1000",
+        cus_country: "Bangladesh",
+        cus_phone: "01711111111",
+        cus_fax: "01711111111",
+        ship_name: "Customer Name",
+        ship_add1: "Dhaka",
+        ship_add2: "Dhaka",
+        ship_city: "Dhaka",
+        ship_state: "Dhaka",
+        ship_postcode: 1000,
+        ship_country: "Bangladesh",
+      };
+
+      const initiateResponse = await axios({
+        url: "https://sandbox.sslcommerz.com/gwprocess/v4/api.php",
+        method: "post",
+        data: initiate,
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      });
+
+      const saveData = await paymentCollection.insertOne(payment);
+
+      const gatewayUrl = initiateResponse?.data?.GatewayPageURL;
+
+      console.log(gatewayUrl);
+      res.send({ gatewayUrl });
+    });
+
+    app.post("/success-ssl-payment", async (req, res) => {
+      const successPayment = req.body;
+      console.log(successPayment);
+    });
+
+    // stripe
+
     // saved payment data
     app.post("/payments", async (req, res) => {
       const payment = req.body;
@@ -243,6 +339,19 @@ async function run() {
           $in: payment.cardIds.map((id) => new ObjectId(id)),
         },
       };
+
+      //send msg to the user
+      mg.messages
+        .create(process.env.MAIL_SENDING_DOMAIN, {
+          from: "Excited User <mailgun@sandbox-123.mailgun.org>",
+          to: ["najmul.nh.shaon@gmail.com"],
+          subject: "Hello",
+          text: "Testing some Mailgun awesomness!",
+          html: "<h1>Testing some Mailgun awesomness!</h1>",
+        })
+        .then((msg) => console.log(msg)) // logs response data
+        .catch((err) => console.error(err)); // logs any error
+
       const deleteResutl = await cartCollection.deleteMany(query);
       res.send({ paymentResult, deleteResutl });
     });
@@ -340,5 +449,5 @@ app.get("/", (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log("server is running");
+  console.log(`server is running ${port}`);
 });
